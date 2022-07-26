@@ -6,27 +6,19 @@ source("https://raw.githubusercontent.com/BHKLAB-Pachyderm/ICB_Common/main/code/
 args <- commandArgs(trailingOnly = TRUE)
 input_dir <- args[1]
 output_dir <- args[2]
-
-load( file.path(input_dir, "Vandenende.RData") )
-
-expr = tpm
+annot_dir <- args[3]
 
 #############################################################################
 #############################################################################
 ## Get Clinical data
 
-clin = as.data.frame( t( read.table( file.path(input_dir, "GSE165252_series_matrix.txt") , sep="\t" , header=FALSE , stringsAsFactors = FALSE ) ) )
-colnames(clin) = clin[ 1 , ]
-clin = clin[ grep( "baseline" , clin$sample.1 ) , ]
+clin = read.table( file.path(input_dir, "CLIN.txt") , sep="\t" , header=TRUE,  stringsAsFactors = FALSE )
+clin = clin[ grep( "baseline" , clin$title ) , ]
 
 clin_original <- clin
-colnames(clin_original)[colnames(clin_original) == 'patient'] <- 'patient_id'
-selected_cols <- c( "sample.2" , "response" ) 
+selected_cols <- c( "geo_accession" , "response_ch1" ) 
 clin = as.data.frame( cbind( clin[ , selected_cols ] , "PD-1/PD-L1" , "Esophageal" , NA , NA , NA , NA , NA , NA , NA , NA , NA , NA , NA , NA , NA ) )
 colnames(clin) = c( "patient" , "response" , "drug_type" , "primary" , "recist" , "age" , "histo" , "response" , "pfs" ,"os" , "t.pfs" , "t.os" , "stage" , "sex" , "response.other.info" , "dna" , "rna" )
-
-clin$patient = sapply( clin$patient , function( x ){ paste( unlist( strsplit( x , "-" , fixed = TRUE )) , collapse = "." ) } ) 
-clin_original$sample.2 <- str_replace_all(clin_original$sample.2, '-', '.')
 
 rownames(clin) = clin$patient
 
@@ -35,18 +27,36 @@ clin$response = ifelse( clin$response %in% "responder" , "R" , ifelse( clin$resp
 clin$rna = "tpm"
 clin = clin[ , c("patient" , "sex" , "age" , "primary" , "histo" , "stage" , "response.other.info" , "recist" , "response" , "drug_type" , "dna" , "rna" , "t.pfs" , "pfs" , "t.os" , "os" ) ]
 
-clin <- format_clin_data(clin_original, 'sample.2', selected_cols, clin)
+clin <- format_clin_data(clin_original, 'geo_accession', selected_cols, clin)
 
 #############################################################################
 #############################################################################
 
-patient = intersect( colnames(expr) , rownames(clin) )
-clin = clin[ patient , ]
-expr =  expr[ , patient ]
+# Expression data
+load(file.path(annot_dir, 'Gencode.v19.annotation.RData'))
+expr <- read.table(file.path(input_dir, 'EXPR.txt.gz'), sep='\t', header=TRUE, stringsAsFactors = FALSE)
+expr <- expr[rownames(expr) %in% rownames(features_gene), ]
 
-case = cbind( patient , 0 , 0 , 1 )
+## Compute TPM data
+genes <- features_gene[rownames(features_gene) %in% rownames(expr), c('start', 'end', 'gene_id')]
+size <- genes$end - genes$start
+names(size) <- rownames(genes)
+
+GetTPM <- function(counts,len) {
+  x <- counts/len
+  return(t(t(x)*1e6/colSums(x)))
+}
+
+expr_tpm = log2( GetTPM(expr, size) + 1 )
+
+# patient = intersect( colnames(expr) , rownames(clin) )
+# clin = clin[ patient , ]
+# expr =  expr[ , patient ]
+
+# cased_sequenced
+case = cbind( clin$patient , 0 , 0 , 1 )
 colnames(case ) = c( "patient" , "snv" , "cna" , "expr" )
 
 write.table( case , file = file.path(output_dir, "cased_sequenced.csv") , sep = ";" , quote = FALSE , row.names = FALSE)
 write.table( clin , file = file.path(output_dir, "CLIN.csv") , sep = ";" , quote = FALSE , row.names = FALSE)
-write.table( expr , file= file.path(output_dir, "EXPR.csv") , quote=FALSE , sep=";" , col.names=TRUE , row.names=TRUE )
+write.table( expr_tpm , file= file.path(output_dir, "EXPR.csv") , quote=FALSE , sep=";" , col.names=TRUE , row.names=TRUE )
