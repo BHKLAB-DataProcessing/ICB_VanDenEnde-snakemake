@@ -47,7 +47,7 @@ GetTPM <- function(counts,len) {
   return(t(t(x)*1e6/colSums(x)))
 }
 
-expr_tpm = log2( GetTPM(expr, size) + 1 )
+expr_tpm = log2( GetTPM(expr, size) + 0.001 )
 
 # patient = intersect( colnames(expr) , rownames(clin) )
 # clin = clin[ patient , ]
