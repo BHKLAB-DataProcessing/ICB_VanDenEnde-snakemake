@@ -39,6 +39,8 @@ clin <- annotate_tissue(clin=clin, study='VanDenEnde', annotation_tissue=annotat
 annotation_drug <- read.csv(file=file.path(annot_dir, 'curation_drug.csv'))
 clin <- add_column(clin, treatmentid=annotate_drug('VanDenEnde', str_extract(clin$characteristics_ch1_1, '(?<=treatment: ).*'), annotation_drug), .after='tissueid')
 
+clin$treatmentid <- str_replace(clin$treatmentid, ' \\+ ', ":")
+
 #############################################################################
 #############################################################################
 
